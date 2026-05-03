@@ -6,8 +6,9 @@ const candidateSchema = new mongoose.Schema({
   phone: String,
   skills: [String],
   experience: Number,
-  resumeUrl: String,
-  embedding: [Number] // for AI matching
+  education: Array,
+  projects: Array,
+  resumeUrl: String
 }, { timestamps: true });
 
 module.exports = mongoose.model("Candidate", candidateSchema);
