@@ -18,7 +18,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// LOGIN
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -29,16 +28,21 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Wrong password" });
 
-    // ⚠️ THIS WAS BREAKING
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    res.json({ token });
+    // ❌ Remove password before sending
+    const { password: _, ...userData } = user._doc;
+
+    res.json({
+      token,
+      user: userData,
+    });
   } catch (err) {
-    console.error("LOGIN ERROR:", err); // 👈 THIS WILL SHOW REAL ERROR
+    console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
