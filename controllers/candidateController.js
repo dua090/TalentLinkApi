@@ -1,7 +1,46 @@
+const fs = require("fs");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
+
 const Candidate = require("../models/Candidate");
-const { parseResume } = require("../services/parserService");
 const { parseResumeWithAI } = require("../services/aiService");
 
+// 🔥 Extract text from file
+const extractText = async (filePath, mimetype) => {
+  if (mimetype === "application/pdf") {
+    const dataBuffer = fs.readFileSync(filePath);
+    const data = await pdfParse(dataBuffer);
+    return data.text;
+  }
+
+  if (
+    mimetype ===
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    const result = await mammoth.extractRawText({ path: filePath });
+    return result.value;
+  }
+
+  return "";
+};
+
+// 🔥 Regex fallback parser (important)
+const fallbackParser = (text) => {
+  const email = text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+  const phone = text.match(/\b\d{10}\b/);
+
+  return {
+    name: text.split("\n")[0] || "Unknown",
+    email: email ? email[0] : "Not found",
+    phone: phone ? phone[0] : "Not found",
+    skills: [],
+    experience: 0,
+    education: [],
+    projects: []
+  };
+};
+
+// 🔥 MAIN CONTROLLER
 exports.uploadResume = async (req, res) => {
   try {
     if (!req.file) {
@@ -10,41 +49,61 @@ exports.uploadResume = async (req, res) => {
 
     const filePath = req.file.path;
 
-    // Extract text
-    const text = await parseResume(filePath);
+    // 1️⃣ Extract text
+    const text = await extractText(filePath, req.file.mimetype);
 
-    // AI parsing
-    const aiData = await parseResumeWithAI(text);
-
-    if (!aiData) {
-      return res.status(500).json({ msg: "AI parsing failed" });
+    if (!text) {
+      return res.status(400).json({ msg: "Could not extract text" });
     }
 
-    // Save
+    // 2️⃣ Try AI parsing
+    let parsedData = null;
+    try {
+      parsedData = await parseResumeWithAI(text);
+    } catch (err) {
+      console.log("AI failed, using fallback");
+    }
+
+    // 3️⃣ Fallback if AI fails
+    if (!parsedData) {
+      parsedData = fallbackParser(text);
+    }
+
+    // 4️⃣ Save to DB
     const candidate = await Candidate.create({
-      name: aiData?.name || "Unknown",
-      email: aiData?.email || "",
-      phone: aiData?.phone || "",
-      skills: aiData?.skills || [],
-      experience: aiData?.experience || 0,
+      ...parsedData,
       resumeUrl: filePath
     });
 
-    res.json(candidate);
+    // 5️⃣ Delete file after processing (optional)
+    fs.unlinkSync(filePath);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Upload failed" });
+    // 6️⃣ Return clean response
+    res.json({
+      msg: "Resume uploaded & parsed successfully",
+      candidate
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ msg: "Server error" });
   }
 };
 
+// 🔥 SEARCH (basic)
 exports.searchCandidates = async (req, res) => {
-  const { skill, experience } = req.query;
+  try {
+    const { skill } = req.query;
 
-  const candidates = await Candidate.find({
-    skills: { $in: [skill] },
-    experience: { $gte: experience || 0 }
-  });
+    let query = {};
+    if (skill) {
+      query.skills = { $regex: skill, $options: "i" };
+    }
 
-  res.json(candidates);
+    const candidates = await Candidate.find(query);
+    res.json(candidates);
+
+  } catch (err) {
+    res.status(500).json({ msg: "Search error" });
+  }
 };

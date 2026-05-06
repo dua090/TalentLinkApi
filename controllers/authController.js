@@ -28,6 +28,7 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Wrong password" });
 
+<<<<<<< HEAD
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
@@ -45,4 +46,19 @@ exports.login = async (req, res) => {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
+=======
+  const token = jwt.sign(
+    { id: user._id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" } // optional but recommended
+  );
+
+  res.json({
+    token,
+    user: {
+      name: user.name,
+      email: user.email,
+    },
+  });
+>>>>>>> a8e50cc (gemini api added)
 };
