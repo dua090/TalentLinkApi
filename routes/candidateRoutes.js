@@ -11,6 +11,6 @@ const upload = multer({ dest: "uploads/" });
 
 router.post("/upload", auth, upload.single("resume"), uploadResume);
 router.get("/search", auth, searchCandidates);
-router.get("/", getCandidates);
+router.get("/", auth, getCandidates);
 
 module.exports = router;
