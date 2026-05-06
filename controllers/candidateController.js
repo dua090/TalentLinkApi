@@ -107,3 +107,17 @@ exports.searchCandidates = async (req, res) => {
     res.status(500).json({ msg: "Search error" });
   }
 };
+
+exports.getCandidates = async (req, res) => {
+  try {
+    const candidates = await Candidate.find().sort({ createdAt: -1 });
+
+    res.status(200).json(candidates);
+  } catch (err) {
+    console.error("GET CANDIDATES ERROR:", err);
+
+    res.status(500).json({
+      message: "Failed to fetch candidates",
+    });
+  }
+};
