@@ -43,53 +43,149 @@ const fallbackParser = (text) => {
 // 🔥 MAIN CONTROLLER
 exports.uploadResume = async (req, res) => {
   try {
+    // 🔥 Check file
     if (!req.file) {
-      return res.status(400).json({ msg: "No file uploaded" });
+      return res.status(400).json({
+        msg: "No file uploaded",
+      });
     }
 
     const filePath = req.file.path;
 
-    // 1️⃣ Extract text
-    const text = await extractText(filePath, req.file.mimetype);
+    // 🔥 Extract text from resume
+    const text = await extractText(
+      filePath,
+      req.file.mimetype
+    );
 
     if (!text) {
-      return res.status(400).json({ msg: "Could not extract text" });
+      return res.status(400).json({
+        msg: "Could not extract text",
+      });
     }
 
-    // 2️⃣ Try AI parsing
+    // 🔥 AI Parsing
     let parsedData = null;
+
     try {
       parsedData = await parseResumeWithAI(text);
     } catch (err) {
-      console.log("AI failed, using fallback");
+      console.log("AI parsing failed, using fallback parser");
     }
 
-    // 3️⃣ Fallback if AI fails
+    // 🔥 Fallback parser
     if (!parsedData) {
       parsedData = fallbackParser(text);
     }
 
-    // 4️⃣ Save to DB
+    // 🔥 Ensure required fields exist
+    parsedData.name = parsedData.name || "Unknown";
+
+    parsedData.email =
+      parsedData.email || "Not found";
+
+    parsedData.phone =
+      parsedData.phone || "Not found";
+
+    parsedData.skills =
+      parsedData.skills || [];
+
+    parsedData.experience =
+      parsedData.experience || 0;
+
+    parsedData.education =
+      parsedData.education || [];
+
+    parsedData.projects =
+      parsedData.projects || [];
+
+    // 🔥 Save candidate
     const candidate = await Candidate.create({
-      ...parsedData,
-      resumeUrl: filePath
+      name: parsedData.name,
+      email: parsedData.email,
+      phone: parsedData.phone,
+      skills: parsedData.skills,
+      experience: parsedData.experience,
+      education: parsedData.education,
+      projects: parsedData.projects,
+
+      resumeUrl: filePath,
+
+      // 🔥 AI source
+      source: "ai",
     });
 
-    // 5️⃣ Delete file after processing (optional)
-    fs.unlinkSync(filePath);
+    // 🔥 Delete uploaded file after parsing
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
 
-    // 6️⃣ Return clean response
-    res.json({
+    // 🔥 Response
+    res.status(201).json({
+      success: true,
       msg: "Resume uploaded & parsed successfully",
-      candidate
+      candidate,
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: "Server error" });
+    console.error("UPLOAD RESUME ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      msg: "Server error",
+    });
   }
 };
+// 🔥 MANUAL ADD CANDIDATE
+exports.addCandidateManual = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      skills,
+      experience,
+      education,
+      projects,
+    } = req.body;
 
+    // 🔥 Validation
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !skills ||
+      experience === undefined
+    ) {
+      return res.status(400).json({
+        msg: "name, email, phone, skills, experience are required",
+      });
+    }
+
+    const candidate = await Candidate.create({
+      name,
+      email,
+      phone,
+      skills,
+      experience,
+      education: education || [],
+      projects: projects || [],
+
+      source: "manual",
+    });
+
+    res.status(201).json({
+      msg: "Candidate added manually",
+      candidate,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      msg: "Server error",
+    });
+  }
+};
 // 🔥 SEARCH (basic)
 exports.searchCandidates = async (req, res) => {
   try {
